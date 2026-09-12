@@ -19,4 +19,6 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+The dashboard now ships a live candlestick chart (TradingView Lightweight Charts) on the Overview and Markets views. It streams a live feed over WebSocket from the FastAPI backend (`/ws/market/{symbol}`). The default feed is a zero-configuration simulated provider; set `MARKET_DATA_MODE` / `UPSTOX_*` in `.env` to plug in a real-time Indian market-data feed (e.g. Upstox V3 with a read-only analytics token).
+
 All predictions are research insights, not financial advice.

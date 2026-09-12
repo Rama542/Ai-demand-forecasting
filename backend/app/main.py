@@ -1,14 +1,27 @@
 """MarketMind AI API. Provider adapters can replace deterministic demo services via env config."""
+from contextlib import asynccontextmanager
 from datetime import datetime
 import json
 import os
 from urllib.error import URLError
 from urllib.request import Request, urlopen
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="MarketMind AI", version="0.1.0")
+from app.services.market_data import (
+    SYMBOLS, hub as market_hub, normalize_interval, normalize_symbol,
+)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    market_hub.start()
+    try:
+        yield
+    finally:
+        await market_hub.stop()
+
+app = FastAPI(title="MarketMind AI", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 class StrategyRequest(BaseModel):
@@ -19,6 +32,44 @@ class StrategyRequest(BaseModel):
 
 @app.get("/api/health")
 def health(): return {"status": "ok", "engine": "xgboost", "time": datetime.utcnow()}
+
+@app.get("/api/market/symbols")
+def market_symbols():
+    return [{"symbol": symbol, "base_price": spec["base"], "decimals": spec["decimals"]}
+            for symbol, spec in SYMBOLS.items()]
+
+@app.get("/api/market/candles")
+def market_candles(symbol: str = "NIFTY 50", interval: str = "1m", limit: int = 150):
+    symbol = normalize_symbol(symbol)
+    interval = normalize_interval(interval)
+    limit = max(10, min(500, limit))
+    engine = market_hub.engine_for(symbol, interval)
+    candles = engine.history(limit)
+    if engine.current is not None:
+        candles = [*candles, engine.current]
+    return {"symbol": symbol, "interval": interval, "source": "simulated",
+            "candles": candles,
+            "notice": "Simulated feed. Configure a market-data provider (e.g. Upstox) for real-time NSE data."}
+
+@app.websocket("/ws/market/{symbol}")
+async def market_stream(websocket: WebSocket, symbol: str, interval: str = "1m"):
+    await websocket.accept()
+    symbol = normalize_symbol(symbol)
+    interval = normalize_interval(interval)
+    queue, engine = market_hub.subscribe(symbol, interval)
+    try:
+        history = engine.history()
+        if engine.current is not None:
+            history = [*history, engine.current]
+        await websocket.send_json({"type": "history", "symbol": symbol, "interval": interval,
+                                   "source": "simulated", "candles": history})
+        while True:
+            message = await queue.get()
+            await websocket.send_json(message)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        market_hub.unsubscribe(symbol, interval, queue)
 
 @app.get("/api/dashboard")
 def dashboard():
