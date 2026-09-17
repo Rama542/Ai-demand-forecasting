@@ -6,3 +6,7 @@ numpy==2.1.1
 pandas==2.2.3
 scikit-learn==1.5.2
 xgboost==2.1.1
+
+# Real-time market data (optional)
+# Uncomment the line below to enable live Upstox V3 market data:
+# upstox-python-sdk>=2.23.0

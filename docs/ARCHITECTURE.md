@@ -15,6 +15,17 @@ The live charting layer is a WebSocket pipeline, not a poll loop:
 
 The default provider is `simulated` so the demo renders live charts with zero configuration. A real-time feed such as the Upstox V3 WebSocket (read-only analytics token) plugs in behind the same `MarketDataHub` contract: each message is `{"type": "candle_update", "symbol", "interval", "candle: {time, open, high, low, close, volume}}"`.
 
+### Upstox live provider
+
+Set `MARKET_DATA_MODE=upstox` and `UPSTOX_ACCESS_TOKEN=<token>` to activate the live feed.
+
+- `backend/app/services/upstox_provider.py` wraps the official `upstox-python-sdk` `MarketDataStreamerV3` in *full* mode (includes 1-minute candlestick data).
+- The provider runs on a daemon thread (the SDK manages its own WebSocket event loop) and parses incoming messages into the standard `candle_update` contract.
+- Instrument keys are mapped in `INSTRUMENT_MAP` (e.g. `NSE_INDEX|Nifty 50` → `NIFTY 50`).
+- When live mode is active, the simulated tick loop runs at 3× slower speed as a fallback for symbols not covered by the live feed.
+- The `/api/health` and `/api/dashboard` endpoints report the current `data_mode` and `live_provider_active` status.
+- Auto-reconnect is enabled by default (5-second interval, 10 retries).
+
 On the frontend, `app/components/LiveCandlestickChart.tsx` renders TradingView Lightweight Charts, supports the 1m/5m/15m/1H/1D intervals, and reconnects automatically. It is shown on the Overview and Markets views.
 
 ## Prediction lifecycle

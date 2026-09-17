@@ -15,11 +15,15 @@ Unix timestamp in seconds.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
+import os
 import random
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 INTERVALS: dict[str, int] = {"1m": 60, "5m": 300, "15m": 900, "1H": 3600, "1D": 86400}
 SUPPORTED_INTERVALS: tuple[str, ...] = tuple(INTERVALS)
@@ -126,6 +130,9 @@ class MarketDataHub:
         self.subscribers: dict[tuple[str, str], set[asyncio.Queue]] = defaultdict(set)
         self.tick_seconds = tick_seconds
         self.task: asyncio.Task | None = None
+        self._preload_task: asyncio.Task | None = None
+        self.live_provider = None
+        self.live_mode: bool = os.getenv("MARKET_DATA_MODE", "simulated").lower() == "upstox"
 
     def engine_for(self, symbol: str, interval: str) -> SymbolEngine:
         key = (symbol, interval)
@@ -143,10 +150,42 @@ class MarketDataHub:
         self.subscribers[(symbol, interval)].discard(queue)
 
     def start(self) -> None:
+        # Start the simulated tick loop (always, even in live mode, as a fallback
+        # for symbols not covered by the live feed)
         if self.task is None or self.task.done():
             self.task = asyncio.create_task(self._run())
+        # Start the Upstox live provider when configured
+        if self.live_mode and self.live_provider is None:
+            self._start_upstox_provider()
+
+    async def _preload_and_start(self) -> None:
+        """Preload historical data then start the live WebSocket streamer."""
+        try:
+            total = await self.live_provider.preload_historical()
+            if total > 0:
+                logger.info(
+                    "Historical preload complete: %d candles loaded across all engines", total
+                )
+            else:
+                logger.info("No historical candles returned – starting with simulated seed data")
+        except Exception:
+            logger.warning("Historical preload failed – continuing with simulated data", exc_info=True)
+
+        # Now start the live WebSocket streamer
+        self.live_provider.start()
+        logger.info("Upstox live provider started – real-time market data active")
 
     async def stop(self) -> None:
+        if self._preload_task is not None:
+            self._preload_task.cancel()
+            try:
+                await self._preload_task
+            except asyncio.CancelledError:
+                pass
+            self._preload_task = None
+        if self.live_provider is not None:
+            await self.live_provider.stop()
+            self.live_provider = None
         if self.task is not None:
             self.task.cancel()
             try:
@@ -155,8 +194,47 @@ class MarketDataHub:
                 pass
             self.task = None
 
+    def _start_upstox_provider(self) -> None:
+        """Lazily import and start the Upstox live-data provider.
+
+        First preloads historical candles via the REST API (so charts show
+        real data immediately), then starts the live WebSocket streamer.
+        """
+        from app.services.upstox_provider import UpstoxProvider, _upstox_available
+
+        access_token = os.getenv("UPSTOX_ACCESS_TOKEN", "").strip()
+        if not access_token:
+            logger.warning(
+                "MARKET_DATA_MODE=upstox but UPSTOX_ACCESS_TOKEN is not set – "
+                "falling back to simulated feed"
+            )
+            self.live_mode = False
+            return
+
+        if not _upstox_available():
+            logger.warning(
+                "upstox-python-sdk is not installed – run 'pip install upstox-python-sdk' "
+                "then restart the server"
+            )
+            self.live_mode = False
+            return
+
+        self.live_provider = UpstoxProvider(self, access_token)
+
+        # Schedule the historical preload as a background task so it runs
+        # concurrently with the simulated tick loop.  The preload fetches
+        # real candles via REST and replaces the simulated seed data in each
+        # engine *before* the WebSocket streamer begins pushing live updates.
+        if self._preload_task is None or self._preload_task.done():
+            self._preload_task = asyncio.create_task(self._preload_and_start())
+
     async def _run(self) -> None:
         while True:
+            # In live mode the Upstox provider handles most candle updates.
+            # The simulated loop still runs at a reduced rate so that symbols
+            # not covered by the live feed (or during market hours gaps) stay
+            # populated.
+            tick = self.tick_seconds * (3 if self.live_mode else 1)
             keys = list(self.subscribers.keys())
             now = time.time()
             for key in keys:
@@ -167,7 +245,7 @@ class MarketDataHub:
                         queue.put_nowait(message)
                     except asyncio.QueueFull:
                         pass
-            await asyncio.sleep(self.tick_seconds)
+            await asyncio.sleep(tick)
 
 
 hub = MarketDataHub()
