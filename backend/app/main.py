@@ -1,3 +1,4 @@
+
 """MarketMind AI API. Provider adapters can replace deterministic demo services via env config."""
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -26,8 +27,18 @@ async def lifespan(_: FastAPI):
     finally:
         await market_hub.stop()
 
+cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:3000,*")
+allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+
 app = FastAPI(title="MarketMind AI", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins if allowed_origins else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 _forecast_cache: dict = {}
 _FORECAST_TTL = 15.0
