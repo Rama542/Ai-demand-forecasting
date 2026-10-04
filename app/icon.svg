@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MarketMind AI">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b5bdb" />
+      <stop offset="1" stop-color="#6b8afd" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)" />
+  <path d="M13 47V17h8.4l10.6 18.2L42.6 17H51v30h-8V30.4l-8.6 14.4h-5.8L20 30.4V47z" fill="#ffffff" />
+</svg>

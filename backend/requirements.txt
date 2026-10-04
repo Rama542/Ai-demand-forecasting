@@ -4,6 +4,9 @@ websockets==13.1
 pydantic==2.9.2
 numpy==2.1.1
 pandas==2.2.3
+# scipy is pinned to match numpy 2.1.1: a newer scipy wheel is built against a
+# newer numpy ABI and its C extensions fail to import with numpy 2.1.1.
+scipy==1.14.1
 scikit-learn==1.5.2
 xgboost==2.1.1
 

@@ -65,6 +65,11 @@ def _build_dataset(candles: list[dict]) -> tuple[np.ndarray, np.ndarray, np.ndar
     return X, y_dir, y_ret, FEATURE_COLUMNS
 
 
+def build_dataset(candles: list[dict]) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    """Public entry point for the feature matrix, shared with the explainer."""
+    return _build_dataset(candles)
+
+
 def _fit_predict(X, y, train_idx, test_idx, task: str) -> tuple[np.ndarray, str]:
     """Fit on train_idx, predict on test_idx with the best available booster."""
     Xtr, ytr, Xte = X[train_idx], y[train_idx], X[test_idx]

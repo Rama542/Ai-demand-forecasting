@@ -23,31 +23,25 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 
+from app.services.universe import market_specs, normalize_symbol
+
 logger = logging.getLogger(__name__)
 
 INTERVALS: dict[str, int] = {"1m": 60, "5m": 300, "15m": 900, "1H": 3600, "1D": 86400}
 SUPPORTED_INTERVALS: tuple[str, ...] = tuple(INTERVALS)
 
+# Keep a short rolling window for charts, but seed enough completed bars for
+# meaningful research.  The old 150-bar seed meant that a "5 years" backtest
+# silently tested only a few days/weeks of data and a number of strategies had
+# no chance to warm up.
 HISTORY_LIMIT = 150
-MAX_RETAINED = 320
+RESEARCH_HISTORY_LIMIT = 1_300
+MAX_RETAINED = 1_500
 TICK_SECONDS = 1.0
 
-SYMBOLS: dict[str, dict] = {
-    "NIFTY 50": {"base": 22493.55, "vol": 0.00012, "decimals": 2, "volume": (12_000_000, 40_000_000)},
-    "SENSEX": {"base": 74742.50, "vol": 0.00011, "decimals": 2, "volume": (9_000_000, 30_000_000)},
-    "BANKNIFTY": {"base": 48320.10, "vol": 0.00015, "decimals": 2, "volume": (5_000_000, 20_000_000)},
-    "RELIANCE": {"base": 2942.60, "vol": 0.00030, "decimals": 2, "volume": (2_000_000, 8_000_000)},
-    "TCS": {"base": 3881.20, "vol": 0.00032, "decimals": 2, "volume": (900_000, 4_000_000)},
-    "HDFCBANK": {"base": 1628.40, "vol": 0.00034, "decimals": 2, "volume": (6_000_000, 25_000_000)},
-    "INFY": {"base": 1461.55, "vol": 0.00036, "decimals": 2, "volume": (4_000_000, 16_000_000)},
-    "TATAMOTORS": {"base": 1014.20, "vol": 0.00040, "decimals": 2, "volume": (5_000_000, 18_000_000)},
-}
+# Full research universe (indices, Nifty 50, Nifty 100, midcap, smallcap, pharma).
+SYMBOLS: dict[str, dict] = market_specs()
 SUPPORTED_SYMBOLS: tuple[str, ...] = tuple(SYMBOLS)
-
-
-def normalize_symbol(symbol: str) -> str:
-    cleaned = " ".join(symbol.strip().replace("-", " ").upper().split())
-    return cleaned if cleaned in SYMBOLS else "NIFTY 50"
 
 
 def normalize_interval(interval: str) -> str:
@@ -73,23 +67,45 @@ class SymbolEngine:
 
     def _seed(self) -> None:
         interval_now = int(time.time()) - (int(time.time()) % self.seconds)
-        start = interval_now - HISTORY_LIMIT * self.seconds
-        candle_vol = self.volatility * math.sqrt(self.seconds)
-        price = self.base * (1 + random.gauss(-0.002, 0.03))
+        start = interval_now - RESEARCH_HISTORY_LIMIT * self.seconds
+        # ``volatility`` is calibrated for the intraday simulator.  Cap the
+        # square-root scaling for daily research bars so a five-year demo path
+        # remains plausible instead of applying an 8%+ daily move to stocks.
+        candle_vol = self.volatility * min(math.sqrt(self.seconds), 80.0)
+        # A per-market seed makes the demo data repeatable between restarts.
+        # Real providers replace this series when configured.
+        rng = random.Random(f"marketmind:{self.symbol}:{self.interval}")
+        price = self.base * (1 + rng.gauss(-0.002, 0.03))
         ts = start
-        for _ in range(HISTORY_LIMIT):
+        # The retained window ends on the *previous* completed bar; the extra
+        # step below stands in for the session that ``_open_candle`` opens.
+        for _ in range(RESEARCH_HISTORY_LIMIT + 1):
             o = price
-            c = price * (1 + random.gauss(0.00001, candle_vol))
-            h = max(o, c) * (1 + random.random() * candle_vol * 0.5)
-            l = min(o, c) * (1 - random.random() * candle_vol * 0.5)
-            volume = random.randint(*self.volume_range)
+            c = price * (1 + rng.gauss(0.00001, candle_vol))
+            h = max(o, c) * (1 + rng.random() * candle_vol * 0.5)
+            l = min(o, c) * (1 - rng.random() * candle_vol * 0.5)
+            volume = rng.randint(*self.volume_range)
             self.candles.append(
                 {"time": ts, "open": round(o, self.decimals), "high": round(h, self.decimals),
                  "low": round(l, self.decimals), "close": round(c, self.decimals), "volume": volume}
             )
             price = c
             ts += self.seconds
-        self.price = price
+        # Rescale the generated path so the newest step lands exactly on
+        # ``self.base`` - the configured market rate the UI quotes. A long
+        # window of unconstrained random steps otherwise drifts several percent
+        # away from the base (NIFTY 50 rendered at ~24,300 instead of 22,559).
+        # Scaling keeps the generated shape intact, and mirrors the backwards
+        # walk already used by ``services.history``.
+        scale = self.base / price
+        for candle in self.candles:
+            for field in ("open", "high", "low", "close"):
+                candle[field] = round(candle[field] * scale, self.decimals)
+        # Drop the step that now represents the live session, so the newest
+        # retained bar stays the previous close. Anchoring on it instead would
+        # make every quote report a 0.00% change.
+        self.candles.pop()
+        self.price = self.base
         self._open_candle(interval_now)
 
     def _open_candle(self, boundary: int) -> None:
@@ -132,13 +148,36 @@ class MarketDataHub:
         self.task: asyncio.Task | None = None
         self._preload_task: asyncio.Task | None = None
         self.live_provider = None
-        self.live_mode: bool = os.getenv("MARKET_DATA_MODE", "simulated").lower() == "upstox"
+        # "live"     -> credential-free public quotes (real prices, default)
+        # "upstox"   -> authenticated Upstox WebSocket stream
+        # "simulated"-> never touch the network; deterministic demo feed
+        self.mode: str = os.getenv("MARKET_DATA_MODE", "live").strip().lower()
+        self.live_mode: bool = self.mode in ("live", "upstox")
+        # Simulated ticks keep running in live mode as a fallback for symbols
+        # the public provider cannot resolve.
+        self.simulated_loop: bool = True
+        self.last_live_sync: float | None = None
 
     def engine_for(self, symbol: str, interval: str) -> SymbolEngine:
         key = (symbol, interval)
         if key not in self.engines:
             self.engines[key] = SymbolEngine(symbol, interval)
+            self._maybe_seed_live(symbol, interval, key)
         return self.engines[key]
+
+    def _maybe_seed_live(self, symbol: str, interval: str, key: tuple[str, str]) -> None:
+        """Swap a fresh simulated engine for real candles without blocking callers.
+
+        Only the charted intervals are seeded; the 1D engine is preloaded at
+        startup for every benchmark index, so this covers the intraday charts
+        the moment a user opens one.
+        """
+        provider = self.live_provider
+        if provider is None or self.mode != "live" or not provider.covers(symbol):
+            return
+        seeder = getattr(provider, "seed_async", None)
+        if callable(seeder):
+            seeder(symbol, interval)
 
     def subscribe(self, symbol: str, interval: str) -> tuple[asyncio.Queue, SymbolEngine]:
         engine = self.engine_for(symbol, interval)
@@ -150,13 +189,41 @@ class MarketDataHub:
         self.subscribers[(symbol, interval)].discard(queue)
 
     def start(self) -> None:
-        # Start the simulated tick loop (always, even in live mode, as a fallback
-        # for symbols not covered by the live feed)
+        # Start the simulated tick loop first so charts have data immediately,
+        # then overlay real prices from whichever live provider is configured.
         if self.task is None or self.task.done():
             self.task = asyncio.create_task(self._run())
-        # Start the Upstox live provider when configured
-        if self.live_mode and self.live_provider is None:
+        if self.mode == "upstox" and self.live_provider is None:
             self._start_upstox_provider()
+        elif self.mode == "live" and self.live_provider is None:
+            self._start_live_provider()
+
+    def _start_live_provider(self) -> None:
+        """Start the credential-free public quote provider."""
+        try:
+            from app.services.live_provider import LiveQuoteProvider, live_mode_enabled
+        except ImportError:
+            logger.warning("live_provider unavailable – staying on simulated feed")
+            return
+        if not live_mode_enabled():
+            return
+        self.live_provider = LiveQuoteProvider(self)
+        if self._preload_task is None or self._preload_task.done():
+            self._preload_task = asyncio.create_task(self._live_preload_and_start())
+
+    async def _live_preload_and_start(self) -> None:
+        """Seed real candles, then begin polling real quotes."""
+        try:
+            total = await self.live_provider.preload()
+            if total > 0:
+                logger.info("Live preload complete: %d real candles loaded", total)
+            else:
+                logger.warning("Live preload returned no candles – using simulated history")
+        except Exception:
+            logger.warning("Live preload failed – continuing with simulated data", exc_info=True)
+        self.live_provider.start()
+        self.simulated_loop = True
+        logger.info("Live market provider started – real prices active")
 
     async def _preload_and_start(self) -> None:
         """Preload historical data then start the live WebSocket streamer."""
@@ -228,24 +295,39 @@ class MarketDataHub:
         if self._preload_task is None or self._preload_task.done():
             self._preload_task = asyncio.create_task(self._preload_and_start())
 
+    def _covered_by_live_feed(self, symbol: str) -> bool:
+        """True when a live provider owns this symbol's price."""
+        if not self.live_mode or self.live_provider is None:
+            return False
+        covers = getattr(self.live_provider, "covers", None)
+        return bool(covers(symbol)) if callable(covers) else True
+
     async def _run(self) -> None:
         while True:
-            # In live mode the Upstox provider handles most candle updates.
-            # The simulated loop still runs at a reduced rate so that symbols
-            # not covered by the live feed (or during market hours gaps) stay
-            # populated.
-            tick = self.tick_seconds * (3 if self.live_mode else 1)
-            keys = list(self.subscribers.keys())
+            # Symbols owned by a live provider keep their real price: the loop
+            # only re-broadcasts the current candle so chart clients stay warm.
+            # Anything the provider cannot resolve still ticks on the simulated
+            # path so no panel ever renders an empty series.
             now = time.time()
-            for key in keys:
+            for key in list(self.subscribers.keys()):
                 engine = self.engines[key]
-                message = engine.advance(now)
+                if self._covered_by_live_feed(key[0]):
+                    if engine.current is None:
+                        continue
+                    message = {
+                        "type": "candle_update",
+                        "symbol": key[0],
+                        "interval": key[1],
+                        "candle": engine.current,
+                    }
+                else:
+                    message = engine.advance(now)
                 for queue in list(self.subscribers[key]):
                     try:
                         queue.put_nowait(message)
                     except asyncio.QueueFull:
                         pass
-            await asyncio.sleep(tick)
+            await asyncio.sleep(self.tick_seconds)
 
 
 hub = MarketDataHub()
