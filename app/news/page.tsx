@@ -8,6 +8,7 @@ import { useAsync, AsyncBoundary } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
+import { SymbolInput } from "@/components/SymbolInput";
 
 export default function NewsPage() {
   const [symbol, setSymbol] = React.useState("");
@@ -32,14 +33,7 @@ export default function NewsPage() {
         <div className="row wrap gap-3" style={{ alignItems: "flex-end" }}>
           <div style={{ width: 190 }}>
             <Field label="Filter by symbol" htmlFor="news-symbol">
-              <input
-                id="news-symbol"
-                className="input"
-                value={symbol}
-                onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-                placeholder="RELIANCE"
-                spellCheck={false}
-              />
+              <SymbolInput id="news-symbol" value={symbol} onChange={setSymbol} placeholder="RELIANCE" />
             </Field>
           </div>
           <Button variant="primary" icon="search" onClick={() => setQuery(symbol.trim())}>

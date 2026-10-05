@@ -22,6 +22,7 @@ inr0,
 } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
 import { useSearchParams } from "next/navigation";
+import { SymbolInput } from "@/components/SymbolInput";
 
 type Tab = "overview" | "trades" | "monthly" | "method";
 
@@ -128,13 +129,7 @@ export default function BacktestingPage() {
         <Card title="Run configuration" className="stack">
           <Field label="Instrument">
             <div className="row gap-2">
-              <input
-                className="input"
-                value={symbol}
-                onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-                aria-label="Symbol"
-                spellCheck={false}
-              />
+              <SymbolInput value={symbol} onChange={setSymbol} aria-label="Symbol" />
               <Button variant="secondary" onClick={() => setInstrumentsOpen(true)} aria-label="Browse instruments">
                 <Icon name="search" size={14} />
               </Button>

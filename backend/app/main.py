@@ -34,7 +34,7 @@ from app.services.analytics import (
 )
 from app.services.history import daily_history
 from app.services.indicators import compute_features
-from app.services.universe import list_instruments, list_universes, lookup
+from app.services.universe import list_instruments, list_universes, lookup, resolve_symbol
 
 RESEARCH_INTERVAL = "1D"
 
@@ -186,6 +186,16 @@ def _research_candles(symbol: str, interval: str, period: str | None) -> list[di
     return candles
 
 
+def _unknown_symbol(symbol: str) -> dict:
+    """Error payload for a symbol outside the universe.
+
+    Falling back to a default instrument would show one asset's analysis under
+    another asset's name, so unknown input is reported instead.
+    """
+    return {"error": f"Unknown instrument '{symbol.strip()}'. Pick a symbol from the suggestions, e.g. ICICIBANK or RELIANCE.",
+            "symbol": symbol.strip()}
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Health, symbols, quotes
 # ──────────────────────────────────────────────────────────────────────────
@@ -255,10 +265,10 @@ def market_universes():
 
 @app.get("/api/market/quote")
 def market_quote(symbol: str = "NIFTY 50", interval: str = "1D"):
-    symbol = normalize_symbol(symbol)
-    if symbol not in SYMBOLS:
-        return {"error": f"Unknown symbol: {symbol}"}
-    return _live_quote(symbol, interval, spark=True)
+    resolved = resolve_symbol(symbol)
+    if resolved is None or resolved not in SYMBOLS:
+        return _unknown_symbol(symbol)
+    return _live_quote(resolved, interval, spark=True)
 
 
 @app.get("/api/market/quotes")
@@ -283,6 +293,8 @@ def _index_quotes() -> list[dict]:
 
 @app.get("/api/market/candles")
 def market_candles(symbol: str = "NIFTY 50", interval: str = "1m", limit: int = 150):
+    if resolve_symbol(symbol) is None:
+        return _unknown_symbol(symbol)
     symbol = normalize_symbol(symbol)
     interval = normalize_interval(interval)
     limit = max(10, min(500, limit))
@@ -415,7 +427,9 @@ def forecast_accuracy(symbol: str = "NIFTY 50", interval: str = "1D"):
 @app.get("/api/research/{symbol}")
 def research(symbol: str = "NIFTY 50", period: str = "Last 1 year"):
     """Everything the research workspace needs for one instrument, in one call."""
-    resolved = normalize_symbol(symbol)
+    resolved = resolve_symbol(symbol)
+    if resolved is None:
+        return _unknown_symbol(symbol)
     period = period if period in ("Last 6 months", "Last 1 year", "Last 2 years", "Last 5 years") else "Last 1 year"
     candles = _research_candles(resolved, RESEARCH_INTERVAL, period)
     if len(candles) < 60:
@@ -454,7 +468,9 @@ def research(symbol: str = "NIFTY 50", period: str = "Last 1 year"):
 
 @app.get("/api/explain/{symbol}")
 def explain(symbol: str = "NIFTY 50", period: str = "Last 2 years"):
-    resolved = normalize_symbol(symbol)
+    resolved = resolve_symbol(symbol)
+    if resolved is None:
+        return _unknown_symbol(symbol)
     return _cached(f"explain:{resolved}:{period}", 600.0, lambda: explain_prediction(resolved, period))
 
 
@@ -485,7 +501,9 @@ def backtest_strategies(indicators: str = "RSI,MACD,EMA"):
 
 @app.post("/api/strategies/generate")
 def generate_strategy(request: StrategyRequest):
-    symbol = normalize_symbol(request.symbol)
+    symbol = resolve_symbol(request.symbol)
+    if symbol is None:
+        return _unknown_symbol(request.symbol)
     candles = _research_candles(symbol, RESEARCH_INTERVAL, request.period)
     if not candles:
         return {"error": "No research window available for this symbol."}
@@ -498,7 +516,9 @@ def generate_strategy(request: StrategyRequest):
 
 @app.post("/api/backtests/run")
 def run_backtest_endpoint(request: StrategyRequest):
-    symbol = normalize_symbol(request.symbol)
+    symbol = resolve_symbol(request.symbol)
+    if symbol is None:
+        return {**_unknown_symbol(request.symbol), "trades": 0}
     strategy = request.strategy if request.strategy in STRATEGIES else "Moving Average Crossover"
     candles = _research_candles(symbol, RESEARCH_INTERVAL, request.period)
     if not candles:
@@ -525,7 +545,9 @@ def run_backtest_endpoint(request: StrategyRequest):
 def equity_curve(symbol: str = "NIFTY 50", strategy: str = "Moving Average Crossover",
                  period: str = "Last 2 years", initial_capital: float = 100_000.0):
     """Equity, drawdown and monthly series without running the whole report payload."""
-    resolved = normalize_symbol(symbol)
+    resolved = resolve_symbol(symbol)
+    if resolved is None:
+        return _unknown_symbol(symbol)
     chosen = strategy if strategy in STRATEGIES else "Moving Average Crossover"
     candles = _research_candles(resolved, RESEARCH_INTERVAL, period)
     result = run_backtest(candles, chosen, symbol=resolved, interval=RESEARCH_INTERVAL,
@@ -575,7 +597,9 @@ def correlations_default():
 
 @app.get("/api/market-doctor/market")
 def market_doctor_market(symbol: str = "NIFTY 50", period: str = "Last 1 year"):
-    resolved = normalize_symbol(symbol)
+    resolved = resolve_symbol(symbol)
+    if resolved is None:
+        return _unknown_symbol(symbol)
     return _cached(f"market:{resolved}:{period}", 300.0, lambda: market_condition(resolved, period))
 
 
@@ -705,7 +729,9 @@ def calendar_events():
 @app.get("/api/reports/research")
 def research_report(symbol: str = "NIFTY 50", period: str = "Last 1 year"):
     """Composed research report built entirely from the live analysis services."""
-    resolved = normalize_symbol(symbol)
+    resolved = resolve_symbol(symbol)
+    if resolved is None:
+        return _unknown_symbol(symbol)
     meta = lookup(resolved)
     candles = _research_candles(resolved, RESEARCH_INTERVAL, period)
     if len(candles) < 60:

@@ -319,15 +319,20 @@ _ALIASES = {
 }
 
 
-def normalize_symbol(symbol: str) -> str:
-    """Resolve a user symbol onto the universe. Unknown names fall back to Nifty 50."""
+def resolve_symbol(symbol: str) -> str | None:
+    """Resolve a user symbol onto the universe, or None when it is not listed."""
     cleaned = " ".join((symbol or "").strip().upper().split())
     if cleaned in INSTRUMENTS:
         return cleaned
     compact = cleaned.replace(" ", "")
     if compact in INSTRUMENTS:
         return compact
-    return _ALIASES.get(cleaned) or _ALIASES.get(compact) or "NIFTY 50"
+    return _ALIASES.get(cleaned) or _ALIASES.get(compact)
+
+
+def normalize_symbol(symbol: str) -> str:
+    """Resolve a user symbol onto the universe. Unknown names fall back to Nifty 50."""
+    return resolve_symbol(symbol) or "NIFTY 50"
 
 
 def lookup(symbol: str) -> dict[str, Any]:

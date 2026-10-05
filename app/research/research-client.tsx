@@ -10,6 +10,7 @@ import { api, type Period, type Interval, type ResearchBundle } from "@/lib/api"
 import { num, pctPlain, ratio, tone, INTERVALS, PERIODS } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
 import { useRouter, useSearchParams } from "next/navigation";
+import { SymbolInput } from "@/components/SymbolInput";
 
 type Tab = "price" | "forecast" | "technicals";
 
@@ -35,8 +36,8 @@ export default function ResearchPage() {
     { enabled: interval !== "1D" },
   );
 
-  const submit = () => {
-    const next = symbol.trim().toUpperCase();
+  const submit = (value: string = symbol) => {
+    const next = value.trim().toUpperCase();
     if (!next) return;
     setCommitted(next);
     router.replace(`/research?symbol=${encodeURIComponent(next)}`, { scroll: false });
@@ -73,15 +74,13 @@ export default function ResearchPage() {
         <div className="row wrap gap-3">
           <div className="grow" style={{ minWidth: 190 }}>
             <Field label="Symbol" htmlFor="symbol">
-              <input
+              <SymbolInput
                 id="symbol"
-                className="input"
                 value={symbol}
-                onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") submit();
+                onChange={setSymbol}
+                onCommit={(next) => {
+                  if (next !== committed) submit(next);
                 }}
-                spellCheck={false}
                 placeholder="RELIANCE"
               />
             </Field>
@@ -109,7 +108,7 @@ export default function ResearchPage() {
             </Field>
           </div>
           <div style={{ alignSelf: "flex-end" }}>
-            <Button variant="primary" icon="search" onClick={submit} loading={bundle.loading}>
+            <Button variant="primary" icon="search" onClick={() => submit()} loading={bundle.loading}>
               Analyse
             </Button>
           </div>
