@@ -230,9 +230,9 @@ code,kbd{font-family:var(--font-mono);font-size:.92em}
   transition:width var(--transition),transform var(--transition);
 }
 .shell[data-collapsed="true"] .sidebar{width:var(--sidebar-w-collapsed)}
+/* The sidebar is position:fixed, so the main column must always reserve exactly its current width. */
+.shell-main{margin-left:var(--sidebar-w)}
 .shell[data-collapsed="true"] .shell-main{margin-left:var(--sidebar-w-collapsed)}
-.shell[data-collapsed="true"] .shell-main.wide{margin-left:var(--sidebar-w)}
-.shell-main.wide{margin-left:var(--sidebar-w)}
 
 .sidebar-brand{display:flex;align-items:center;gap:var(--sp-3);height:var(--header-h);padding:0 var(--sp-4);border-bottom:1px solid var(--border-subtle);flex:none;overflow:hidden}
 .brand-mark{width:26px;height:26px;border-radius:var(--radius-btn);background:var(--accent);color:var(--accent-ink,var(--tp-acc-ink));display:grid;place-items:center;flex:none;font-family:var(--font-mono);font-weight:600;font-size:var(--text-sm);letter-spacing:-.04em}
@@ -564,7 +564,7 @@ table.data a:hover{color:var(--accent)}
   .menu-btn{display:grid}
   .sidebar{transform:translateX(-100%);box-shadow:var(--shadow-lg)}
   .shell[data-mobile-open="true"] .sidebar{transform:none}
-  .shell[data-collapsed="true"] .shell-main,.shell[data-collapsed="true"] .shell-main.wide,.shell-main.wide{margin-left:0}
+  .shell-main,.shell[data-collapsed="true"] .shell-main{margin-left:0}
   .shell[data-collapsed="true"] .sidebar{width:var(--sidebar-w)}
   .shell[data-collapsed="true"] .nav-item{justify-content:flex-start;padding:7px var(--sp-2)}
   .shell[data-collapsed="true"] .nav-label,.shell[data-collapsed="true"] .nav-badge,.shell[data-collapsed="true"] .workspace-meta,.shell[data-collapsed="true"] .brand-name{display:block}
