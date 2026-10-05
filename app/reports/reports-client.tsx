@@ -10,6 +10,7 @@ import { api, type Period, type ResearchReport } from "@/lib/api";
 import { dateTime, PERIODS } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
 import { useSearchParams } from "next/navigation";
+import { SymbolInput } from "@/components/SymbolInput";
 
 export default function ReportsPage() {
   const params = useSearchParams();
@@ -56,13 +57,7 @@ export default function ReportsPage() {
       <div className="grid grid-sidebar" style={{ alignItems: "start" }}>
         <Card title="Report setup" className="stack">
           <Field label="Instrument" htmlFor="rep-symbol">
-            <input
-              id="rep-symbol"
-              className="input"
-              value={symbol}
-              onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-              spellCheck={false}
-            />
+            <SymbolInput id="rep-symbol" value={symbol} onChange={setSymbol} />
           </Field>
           <Field label="Window">
             <select className="select" value={period} onChange={(event) => setPeriod(event.target.value as Period)}>

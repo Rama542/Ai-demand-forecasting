@@ -9,6 +9,7 @@ import { useAsync, AsyncBoundary, useLocalStorage } from "@/lib/hooks";
 import { api, type Interval, type Quote } from "@/lib/api";
 import { compact, num, pct, pctPlain, scoreLabel, scoreTone, tone, INTERVALS } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
+import { SymbolInput } from "@/components/SymbolInput";
 
 /** SLATE's hero block: one headline figure, then a horizontal rail of cards. */
 function HeroQuote({ quote, isLoading }: { quote: Quote | null | undefined; isLoading: boolean }) {
@@ -97,6 +98,8 @@ function IndexRail({ indices, isLoading }: { indices: Quote[] | undefined; isLoa
 
 export default function DashboardPage() {
   const [symbol, setSymbol] = useLocalStorage("dashboard-symbol", "RELIANCE");
+  const [draft, setDraft] = React.useState(symbol);
+  React.useEffect(() => setDraft(symbol), [symbol]);
   const [interval, setInterval] = useLocalStorage<Interval>("dashboard-interval", "1D");
 
   const dashboard = useAsync((signal) => api.dashboard(signal), []);
@@ -174,12 +177,12 @@ export default function DashboardPage() {
               }
             >
               <div className="row gap-2" style={{ marginBottom: "var(--sp-4)" }}>
-                <input
+                <SymbolInput
                   className="input input-sm"
-                  value={symbol}
-                  onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+                  value={draft}
+                  onChange={setDraft}
+                  onCommit={setSymbol}
                   aria-label="Chart symbol"
-                  spellCheck={false}
                   style={{ maxWidth: 180 }}
                 />
                 <span className="faint" style={{ fontSize: "var(--text-xs)" }}>

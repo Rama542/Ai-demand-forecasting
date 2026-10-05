@@ -8,6 +8,7 @@ import { useAsync } from "@/lib/hooks";
 import { api, type Period } from "@/lib/api";
 import { num, pct, tone, PERIODS } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
+import { SymbolInput } from "@/components/SymbolInput";
 
 function PillarBar({ pillar, score, detail }: { pillar: string; score: number; detail: string }) {
   const colour = score >= 55 ? "var(--bull)" : score >= 35 ? "var(--warn)" : "var(--bear)";
@@ -40,6 +41,7 @@ function PillarBar({ pillar, score, detail }: { pillar: string; score: number; d
 
 export default function MarketDoctorPage() {
   const [symbol, setSymbol] = React.useState("NIFTY 50");
+  const [draft, setDraft] = React.useState(symbol);
   const [period, setPeriod] = React.useState<Period>("Last 1 year");
 
   const condition = useAsync(
@@ -66,13 +68,7 @@ export default function MarketDoctorPage() {
         <div className="row wrap gap-3" style={{ alignItems: "flex-end" }}>
           <div style={{ width: 190 }}>
             <Field label="Instrument" htmlFor="doc-symbol">
-              <input
-                id="doc-symbol"
-                className="input"
-                value={symbol}
-                onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-                spellCheck={false}
-              />
+              <SymbolInput id="doc-symbol" value={draft} onChange={setDraft} onCommit={setSymbol} />
             </Field>
           </div>
           <div style={{ width: 165 }}>

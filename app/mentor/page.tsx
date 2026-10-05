@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { useAction, useLocalStorage } from "@/lib/hooks";
 import { api, type MentorReply } from "@/lib/api";
 import { PageHeader } from "@/components/shell/UserMenu";
+import { SymbolInput } from "@/components/SymbolInput";
 
 interface Message {
   id: string;
@@ -74,14 +75,7 @@ export default function MentorPage() {
       <div className="grid grid-sidebar" style={{ alignItems: "start" }}>
         <Card title="Context" className="stack">
           <Field label="Focus instrument (optional)" htmlFor="mentor-symbol">
-            <input
-              id="mentor-symbol"
-              className="input"
-              value={symbol}
-              onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-              placeholder="RELIANCE"
-              spellCheck={false}
-            />
+            <SymbolInput id="mentor-symbol" value={symbol} onChange={setSymbol} placeholder="RELIANCE" />
           </Field>
           <p className="faint" style={{ fontSize: "var(--text-xs)" }}>
             Naming an instrument lets the mentor quote that symbol&apos;s actual figures instead of explaining the general
