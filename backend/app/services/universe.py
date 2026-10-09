@@ -299,6 +299,26 @@ def _build() -> dict[str, dict[str, Any]]:
 
 INSTRUMENTS: dict[str, dict[str, Any]] = _build()
 
+
+def _apply_real_bases() -> None:
+    """Anchor every instrument on its latest real close when NSE history exists.
+
+    The base price seeds the live engine and the simulated fallbacks, so this
+    keeps even un-streamed symbols at their true market level.
+    """
+    try:
+        from app.services import nse_data
+    except Exception:
+        return
+    for symbol, meta in INSTRUMENTS.items():
+        close = nse_data.last_close(symbol)
+        if close:
+            meta["base"] = close
+            meta["volume"] = _volume_band(close, meta["kind"])
+
+
+_apply_real_bases()
+
 _ALIASES = {
     "NIFTY": "NIFTY 50",
     "NIFTY50": "NIFTY 50",

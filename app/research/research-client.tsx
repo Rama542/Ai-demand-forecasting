@@ -53,7 +53,7 @@ export default function ResearchPage() {
         title={meta ? `${meta.symbol} · ${meta.name}` : "Stock research"}
         description={
           meta
-            ? `${meta.sector} · ${meta.primary_group} · ${meta.kind}`
+            ? `${meta.sector} · ${meta.primary_group} · ${meta.kind}${bundle.data?.data_source ? ` · daily data: ${bundle.data.data_source}` : ""}`
             : "Price history, model output and the indicators behind them, for a single instrument at a time."
         }
         actions={

@@ -63,10 +63,30 @@ class SymbolEngine:
         self.price: float = self.base
         self.candles: list[dict] = []
         self.current: dict | None = None
+        # Daily engines seeded from real NSE bars hold their price instead of
+        # random-walking; a live provider, when present, still updates them.
+        self.real_daily: bool = False
         self._seed()
+
+    def _seed_real_daily(self, interval_now: int) -> bool:
+        from app.services import nse_data
+        series = nse_data.candles(self.symbol)
+        if self.interval != "1D" or len(series) < 80:
+            return False
+        bars = [dict(c) for c in series[-RESEARCH_HISTORY_LIMIT:]]
+        # When today's session is already in the archive it is the forming bar.
+        self.current = bars.pop() if bars[-1]["time"] >= interval_now else None
+        self.candles = bars
+        self.price = float((self.current or bars[-1])["close"])
+        if self.current is None:
+            self._open_candle(interval_now)
+        self.real_daily = True
+        return True
 
     def _seed(self) -> None:
         interval_now = int(time.time()) - (int(time.time()) % self.seconds)
+        if self._seed_real_daily(interval_now):
+            return
         start = interval_now - RESEARCH_HISTORY_LIMIT * self.seconds
         # ``volatility`` is calibrated for the intraday simulator.  Cap the
         # square-root scaling for daily research bars so a five-year demo path
@@ -114,6 +134,9 @@ class SymbolEngine:
                         "close": price, "volume": 0}
 
     def advance(self, now: float) -> dict:
+        if self.real_daily and self.current is not None:
+            return {"type": "candle_update", "symbol": self.symbol, "interval": self.interval,
+                    "candle": self.current}
         self.price = self.price * (1 + random.gauss(0, self.volatility))
         price = round(self.price, self.decimals)
         boundary = int(now) - (int(now) % self.seconds)
@@ -201,11 +224,11 @@ class MarketDataHub:
     def _start_live_provider(self) -> None:
         """Start the credential-free public quote provider."""
         try:
-            from app.services.live_provider import LiveQuoteProvider, live_mode_enabled
+            from app.services.live_provider import LiveQuoteProvider
         except ImportError:
             logger.warning("live_provider unavailable – staying on simulated feed")
             return
-        if not live_mode_enabled():
+        if self.mode != "live":
             return
         self.live_provider = LiveQuoteProvider(self)
         if self._preload_task is None or self._preload_task.done():
@@ -270,20 +293,16 @@ class MarketDataHub:
         from app.services.upstox_provider import UpstoxProvider, _upstox_available
 
         access_token = os.getenv("UPSTOX_ACCESS_TOKEN", "").strip()
-        if not access_token:
+        if not access_token or not _upstox_available():
+            # Fall back to the free public quote feed rather than simulation,
+            # so prices stay real while the Upstox token is missing or expired.
             logger.warning(
-                "MARKET_DATA_MODE=upstox but UPSTOX_ACCESS_TOKEN is not set – "
-                "falling back to simulated feed"
+                "MARKET_DATA_MODE=upstox but %s – falling back to the free live feed",
+                "UPSTOX_ACCESS_TOKEN is not set" if not access_token
+                else "upstox-python-sdk is not installed",
             )
-            self.live_mode = False
-            return
-
-        if not _upstox_available():
-            logger.warning(
-                "upstox-python-sdk is not installed – run 'pip install upstox-python-sdk' "
-                "then restart the server"
-            )
-            self.live_mode = False
+            self.mode = "live"
+            self._start_live_provider()
             return
 
         self.live_provider = UpstoxProvider(self, access_token)

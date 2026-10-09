@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 import os
 import threading
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -56,6 +58,22 @@ INSTRUMENT_MAP: dict[str, str] = {
     "INFY":        "NSE_EQ|INE009A01021",
     "TATAMOTORS":  "NSE_EQ|INE157A01041",
 }
+
+# Upstox addresses every NSE equity as ``NSE_EQ|<ISIN>``. The NSE archive
+# builder records each universe stock's current ISIN, so the whole stock
+# universe streams without a hand-maintained list.
+def _extend_from_isins() -> None:
+    path = Path(__file__).resolve().parent.parent / "data" / "nse_isin.json"
+    try:
+        isins = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    for symbol, isin in isins.items():
+        INSTRUMENT_MAP[symbol] = f"NSE_EQ|{isin}"
+    INSTRUMENT_MAP.setdefault("INDIA VIX", "NSE_INDEX|India VIX")
+
+
+_extend_from_isins()
 
 # Reverse map: Upstox instrument key → MarketMind symbol
 _INSTRUMENT_REVERSE: dict[str, str] = {v: k for k, v in INSTRUMENT_MAP.items()}
