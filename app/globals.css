@@ -330,6 +330,9 @@ code,kbd{font-family:var(--font-mono);font-size:.92em}
 .btn-ghost:hover:not(:disabled){background:var(--bg-hover);color:var(--text-primary)}
 .btn-danger{background:var(--bear-soft);color:var(--bear);border-color:var(--bear-border)}
 .btn-danger:hover:not(:disabled){background:color-mix(in srgb,var(--bear) 20%,transparent)}
+.scan-pick{display:block;width:100%;text-align:left;padding:7px var(--sp-3);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:var(--text-sm);transition:background var(--transition),color var(--transition)}
+.scan-pick:hover{background:var(--bg-hover);color:var(--text-primary)}
+.scan-pick.active{background:var(--accent-soft);color:var(--accent);font-weight:550}
 .btn-sm{height:27px;padding:0 var(--sp-3);font-size:var(--text-xs)}
 .btn-sm svg{width:12px;height:12px}
 .btn-lg{height:38px;padding:0 var(--sp-5);font-size:var(--text-base)}

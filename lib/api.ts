@@ -568,6 +568,8 @@ export interface ResearchBundle {
   meta: InstrumentMeta;
   period: string;
   interval: Interval;
+  /** Where the daily history came from, e.g. "NSE bhavcopy" or "simulated". */
+  data_source?: string;
   quote: Quote | null;
   candles: Candle[];
   technicals: TechnicalSummary;
@@ -577,6 +579,54 @@ export interface ResearchBundle {
   strategy: StrategyCard[];
   disclaimer: string;
   error?: string;
+}
+
+export interface ScanCondition {
+  field: string;
+  op: string;
+  value: number | string;
+}
+
+export interface ScanPreset {
+  id: string;
+  name: string;
+  summary: string;
+  logic: "all" | "any";
+  conditions: ScanCondition[];
+}
+
+export interface ScannerCatalog {
+  presets: { group: string; scans: ScanPreset[] }[];
+  fields: { id: string; label: string; unit: string }[];
+  operators: string[];
+  universes: string[];
+}
+
+export interface ScanRow {
+  symbol: string;
+  name: string;
+  sector: string;
+  source: string;
+  close: number | null;
+  change_pct: number | null;
+  ret_20: number | null;
+  rsi: number | null;
+  adx: number | null;
+  macd_hist: number | null;
+  vol_ratio: number | null;
+  pct_from_high52: number | null;
+  as_of: number;
+}
+
+export interface ScanResult {
+  scanned: number;
+  count: number;
+  as_of: number | null;
+  real_data: number;
+  results: ScanRow[];
+  scan?: string;
+  summary?: string;
+  id?: string;
 }
 
 export const api = {
@@ -708,6 +758,26 @@ export const api = {
 
   news: (params: { symbol?: string } = {}, signal?: AbortSignal) =>
     request<NewsResponse>(`/api/news${qs(params)}`, { signal, timeoutMs: 30_000 }),
+
+  scannerCatalog: (signal?: AbortSignal) =>
+    request<ScannerCatalog>("/api/scanner/catalog", { signal, timeoutMs: 20_000 }),
+
+  scanPreset: (params: { id: string; universe?: string }, signal?: AbortSignal) =>
+    request<ScanResult>(`/api/scanner/preset/${encodeURIComponent(params.id)}${qs({ universe: params.universe })}`, {
+      signal,
+      timeoutMs: 120_000,
+    }),
+
+  scanCustom: (
+    payload: { conditions: ScanCondition[]; logic: "all" | "any"; universe?: string },
+    signal?: AbortSignal,
+  ) =>
+    request<ScanResult>("/api/scanner/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      signal,
+      timeoutMs: 120_000,
+    }),
 
   calendar: (signal?: AbortSignal) =>
     request<CalendarResponse>("/api/calendar/events", { signal, timeoutMs: 30_000 }),

@@ -10,6 +10,6 @@ scipy==1.14.1
 scikit-learn==1.5.2
 xgboost==2.1.1
 
-# Real-time market data (optional)
-# Uncomment the line below to enable live Upstox V3 market data:
-# upstox-python-sdk>=2.23.0
+# Real-time market data via Upstox V3 (used only when MARKET_DATA_MODE=upstox
+# and UPSTOX_ACCESS_TOKEN are set; otherwise the free live feed is used).
+upstox-python-sdk==2.30.0

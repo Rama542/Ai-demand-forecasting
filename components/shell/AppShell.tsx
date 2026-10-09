@@ -32,6 +32,7 @@ export const NAV: NavSection[] = [
       { href: "/dashboard", label: "Dashboard", icon: "grid" },
       { href: "/markets", label: "Markets", icon: "chart" },
       { href: "/research", label: "Stock Research", icon: "search", wide: true },
+      { href: "/scanner", label: "Stock Scanner", icon: "filter", wide: true },
     ],
   },
   {

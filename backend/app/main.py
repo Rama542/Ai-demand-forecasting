@@ -32,9 +32,10 @@ from app.services.analytics import (
     correlation_matrix, explain_prediction, market_condition, portfolio_analysis,
     technical_summary, universe_sectors,
 )
-from app.services.history import daily_history
+from app.services import nse_data, scanner
+from app.services.history import daily_history, history_source
 from app.services.indicators import compute_features
-from app.services.universe import list_instruments, list_universes, lookup, resolve_symbol
+from app.services.universe import INSTRUMENTS, list_instruments, list_universes, lookup, resolve_symbol
 
 RESEARCH_INTERVAL = "1D"
 
@@ -42,6 +43,10 @@ RESEARCH_INTERVAL = "1D"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     market_hub.start()
+    nse_data.start_background_updates(
+        [s for s, meta in INSTRUMENTS.items() if meta["kind"] != "index"]
+    )
+    scanner.warm_up()
     try:
         yield
     finally:
@@ -176,10 +181,12 @@ def _research_candles(symbol: str, interval: str, period: str | None) -> list[di
     candles = daily_history(symbol, period=period or "Last 2 years")
     if not candles:
         return []
-    # Append the live in-progress bar when its timestamp is genuinely newer.
+    # Append the live in-progress bar when its timestamp is genuinely newer and
+    # a real feed owns the price; a simulated bar must never extend real history.
     try:
         engine = market_hub.engine_for(symbol, RESEARCH_INTERVAL)
-        if engine.current is not None and int(engine.current["time"]) > int(candles[-1]["time"]):
+        if (market_hub._covered_by_live_feed(symbol) and engine.current is not None
+                and int(engine.current["time"]) > int(candles[-1]["time"])):
             candles = [*candles, engine.current]
     except Exception:
         pass
@@ -236,7 +243,8 @@ def health():
         "live_provider_active": bool(provider is not None and getattr(provider, "_running", False)),
         "model_ready": runtime["ready"],
         "symbols": len(SYMBOLS),
-        "universe_note": "Prices are demo bases unless MARKET_DATA_MODE points at a real feed.",
+        "history": nse_data.status(),
+        "universe_note": "Daily history comes from the free NSE archives; live ticks come from MARKET_DATA_MODE.",
     }
 
 
@@ -303,7 +311,7 @@ def market_candles(symbol: str = "NIFTY 50", interval: str = "1m", limit: int = 
     if engine.current is not None:
         candles = [*candles, engine.current]
     status = _live_status()
-    covered = market_hub._covered_by_live_feed(symbol)
+    covered = market_hub._covered_by_live_feed(symbol) or engine.real_daily
     notice = None if covered else (
         "Simulated feed. Set MARKET_DATA_MODE=live for real prices, or "
         "MARKET_DATA_MODE=upstox with UPSTOX_ACCESS_TOKEN for a streaming feed."
@@ -455,6 +463,7 @@ def research(symbol: str = "NIFTY 50", period: str = "Last 1 year"):
         "meta": lookup(resolved),
         "period": period,
         "interval": RESEARCH_INTERVAL,
+        "data_source": history_source(resolved),
         "quote": live,
         "candles": candles,
         "technicals": technicals,
@@ -535,7 +544,7 @@ def run_backtest_endpoint(request: StrategyRequest):
     result["initial_capital"] = request.initial_capital
     result["cost_pct"] = request.cost_pct
     result["atr_mult"] = request.atr_mult
-    result["data_source"] = "upstox" if market_hub.live_mode else "deterministic research history"
+    result["data_source"] = history_source(symbol)
     result["execution"] = execution_notes(request.atr_mult, request.cost_pct)
     result["disclaimer"] = "Research simulation only. Not investment advice and not a promise of future returns."
     return result
@@ -606,6 +615,38 @@ def market_doctor_market(symbol: str = "NIFTY 50", period: str = "Last 1 year"):
 @app.get("/api/sectors")
 def sectors():
     return {"sectors": universe_sectors()}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Scanner
+# ──────────────────────────────────────────────────────────────────────────
+class ScanCondition(BaseModel):
+    field: str = Field(max_length=40)
+    op: str = Field(max_length=20)
+    value: float | str
+
+
+class ScanRequest(BaseModel):
+    conditions: list[ScanCondition] = Field(min_length=1, max_length=12)
+    logic: str = Field(default="all", pattern="^(all|any)$")
+    universe: str | None = Field(default=None, max_length=40)
+
+
+@app.get("/api/scanner/catalog")
+def scanner_catalog():
+    """Preset scans, the fields the custom builder can use, and the universes."""
+    return {**scanner.catalog(), "universes": ["All", *[g["label"] for g in list_universes()["groups"]]]}
+
+
+@app.get("/api/scanner/preset/{preset_id}")
+def scanner_preset(preset_id: str, universe: str | None = None):
+    return scanner.run_preset(preset_id, universe)
+
+
+@app.post("/api/scanner/run")
+def scanner_run(request: ScanRequest):
+    conditions = [c.model_dump() for c in request.conditions]
+    return scanner.run_scan(conditions, request.logic, request.universe)
 
 
 # ──────────────────────────────────────────────────────────────────────────

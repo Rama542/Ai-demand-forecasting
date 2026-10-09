@@ -1,9 +1,12 @@
-"""Deterministic daily history for research backtests.
+"""Daily history for research: real NSE data first, simulation as fallback.
 
-The live chart only keeps a short rolling window. A two-year or five-year
-test needs its own series. The path is seeded by symbol, ends on that
-symbol's demo base price, and walks through bull, quiet, bear and recovery
-regimes so trend, momentum, mean-reversion and breakout rules all get trades.
+Every research feature (forecast, SHAP, backtests, Market Doctor, portfolio,
+correlations, scanner) reads daily candles through :func:`daily_history`.
+Symbols present in the NSE archive store (``nse_data``) get their real,
+corporate-action-adjusted bars. Anything missing falls back to a deterministic
+simulated path that is seeded by symbol, ends on the symbol's base price, and
+walks through bull, quiet, bear and recovery regimes.
+:func:`history_source` tells callers which of the two they received.
 """
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ import hashlib
 import random
 from datetime import datetime, timezone
 
+from app.services import nse_data
 from app.services.universe import lookup
 
 PERIOD_BARS = {
@@ -69,11 +73,23 @@ def _drift_vol(index: int, total: int, kind: str) -> tuple[float, float]:
     return drift, vol
 
 
+def history_source(symbol: str) -> str:
+    """Where :func:`daily_history` gets this symbol's bars from."""
+    return nse_data.source_for(lookup(symbol)["symbol"])
+
+
 def daily_history(symbol: str, period: str | None = None, bars: int | None = None) -> list[dict]:
-    """Build `bars` weekday candles ending at the symbol's demo base price."""
+    """The latest ``bars`` daily candles: real NSE history when stored, else simulated."""
     meta = lookup(symbol)
     count = bars if bars is not None else bars_for_period(period)
     count = max(80, min(1500, int(count)))
+    if nse_data.has(meta["symbol"]):
+        return [dict(c) for c in nse_data.candles(meta["symbol"])[-count:]]
+    return _simulated_history(meta, count)
+
+
+def _simulated_history(meta: dict, count: int) -> list[dict]:
+    """Build ``count`` weekday candles ending at the symbol's base price."""
     rng = random.Random(_seed(meta["symbol"]))
     returns: list[float] = []
     for i in range(count):
