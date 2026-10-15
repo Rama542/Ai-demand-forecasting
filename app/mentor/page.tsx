@@ -16,6 +16,27 @@ interface Message {
   model?: MentorReply["model"];
 }
 
+/**
+ * Render the light Markdown the language model writes (**bold**, *italic*,
+ * `code` and "#" headings) as React elements. Text is never injected as HTML,
+ * so a reply cannot smuggle markup into the page; bullets and line breaks
+ * survive through the bubble's pre-wrap styling.
+ */
+function formatReply(text: string): React.ReactNode[] {
+  return text.split("\n").flatMap((line, lineIndex) => {
+    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    const body = heading ? heading[1] : line;
+    const parts = body.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g).map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) return <strong key={i}>{part.slice(2, -2)}</strong>;
+      if (part.startsWith("`") && part.endsWith("`") && part.length > 2) return <code key={i}>{part.slice(1, -1)}</code>;
+      if (part.startsWith("*") && part.endsWith("*") && part.length > 2) return <em key={i}>{part.slice(1, -1)}</em>;
+      return part;
+    });
+    const content = heading ? <strong key={`h${lineIndex}`}>{parts}</strong> : <React.Fragment key={`l${lineIndex}`}>{parts}</React.Fragment>;
+    return lineIndex === 0 ? [content] : ["\n", content];
+  });
+}
+
 const SUGGESTIONS = [
   "What does a Sharpe ratio of 0.4 actually mean?",
   "Why did my backtest underperform buy and hold?",
@@ -29,8 +50,10 @@ export default function MentorPage() {
   const [symbol, setSymbol] = React.useState("");
   const endRef = React.useRef<HTMLDivElement>(null);
 
-  const send = useAction(async (text: string) => {
-    const reply = await api.mentor({ message: text, symbol: symbol.trim() || undefined });
+  const send = useAction(async (text: string, earlier: Message[]) => {
+    // The last few turns go along so follow-up questions keep their context.
+    const history = earlier.slice(-8).map((m) => ({ role: m.role, content: m.text.slice(0, 2000) }));
+    const reply = await api.mentor({ message: text, symbol: symbol.trim() || undefined, history });
     return reply;
   });
 
@@ -42,7 +65,7 @@ export default function MentorPage() {
     setMessages([...messages, userMessage]);
     setInput("");
 
-    const reply = await send.run(trimmed);
+    const reply = await send.run(trimmed, messages);
     if (reply) {
       setMessages([
         ...messages,
@@ -144,7 +167,7 @@ export default function MentorPage() {
                       whiteSpace: "pre-wrap",
                     }}
                   >
-                    {message.text}
+                    {message.role === "assistant" ? formatReply(message.text) : message.text}
                   </div>
                 </div>
               ))

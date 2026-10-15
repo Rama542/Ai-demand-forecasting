@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 import json
 import os
+import re
 import time
 from typing import Any
 from urllib.error import URLError
@@ -843,37 +844,67 @@ class MentorRequest(BaseModel):
     history: list[ChatTurn] = Field(default_factory=list, max_length=20)
 
 
+MENTOR_DISCLAIMER = "Educational research only; not financial advice."
+GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b"
+
+
+def _mentor_providers() -> list[tuple[str, str, Any]]:
+    """(provider, model, ask function) in priority order.
+
+    Groq (hosted, needs GROQ_API_KEY) answers first because it also works on
+    the cloud deployment; a local Ollama model is next; the rule-based
+    fallback below always answers last.
+    """
+    providers: list[tuple[str, str, Any]] = []
+    if os.getenv("GROQ_API_KEY", "").strip():
+        providers.append(("groq", os.getenv("GROQ_MODEL", GROQ_DEFAULT_MODEL), _ask_groq))
+    if os.getenv("OLLAMA_ENABLED", "1") != "0":
+        providers.append(("ollama", os.getenv("OLLAMA_MODEL", "qwen2.5:3b"), _ask_ollama))
+    return providers
+
+
 @app.post("/api/mentor/chat")
 def mentor(request: MentorRequest):
     """Explain market concepts without giving personalised investment advice.
 
-    The primary provider is the local Ollama runtime; a deterministic fallback
-    keeps the user experience useful while the local model is unavailable.
+    Tries each configured LLM provider in turn and falls back to deterministic
+    answers, so the mentor always replies even when every model is offline.
     """
-    text = request.message.lower()
-    fallback = _mentor_fallback(text)
-    try:
-        answer = _ask_ollama(request.message, request.symbol, request.history)
-        return {"answer": answer, "topic": "market-education", "provider": "ollama",
-                "model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
-                "disclaimer": "Educational research only; not financial advice."}
-    except (URLError, TimeoutError, OSError, ValueError, KeyError, json.JSONDecodeError, TypeError) as exc:
-        # Preserve an available mentor when Ollama is starting, unavailable, or returns malformed data.
-        return {"answer": fallback, "topic": "market-education", "provider": "fallback", "model": None,
-                "service_notice": f"Local Ollama unavailable: {exc}",
-                "disclaimer": "Educational research only; not financial advice."}
+    notices: list[str] = []
+    for provider, model, ask in _mentor_providers():
+        try:
+            answer = ask(request.message, request.symbol, request.history)
+            return {"answer": answer, "topic": "market-education", "provider": provider,
+                    "model": model, "disclaimer": MENTOR_DISCLAIMER}
+        except (URLError, TimeoutError, OSError, ValueError, KeyError, IndexError,
+                json.JSONDecodeError, TypeError) as exc:
+            notices.append(f"{provider} unavailable: {exc}")
+    return {"answer": _mentor_fallback(request.message.lower()), "topic": "market-education",
+            "provider": "fallback", "model": None,
+            "service_notice": "; ".join(notices) or "No language model is configured.",
+            "disclaimer": MENTOR_DISCLAIMER}
 
 
 def _market_snapshot(symbol: str | None = None) -> str:
     """Live levels so the mentor can ground answers instead of speaking in generalities."""
     parts: list[str] = []
     targets = ["NIFTY 50"]
-    resolved = normalize_symbol(symbol) if symbol else None
+    resolved = resolve_symbol(symbol) if symbol else None
     if resolved and resolved != "NIFTY 50":
         targets.append(resolved)
     for name in targets:
         quote = _live_quote(name, "1D")
         parts.append(f"{quote['name']} at {quote['price']:,.2f} ({quote['change_pct']:+.2f}% on the day)")
+    if resolved and resolved in SYMBOLS:
+        tech = technical_summary(resolved, "Last 1 year")
+        if not tech.get("error"):
+            parts.append(
+                f"{resolved} daily indicators ({history_source(resolved)}): RSI {tech.get('rsi')}, "
+                f"MACD histogram {tech.get('macd_hist')}, ADX {tech.get('adx')}, EMA20 {tech.get('ema20')}, "
+                f"EMA50 {tech.get('ema50')}, SMA200 {tech.get('sma200')}, ATR {tech.get('atr_pct')}% of price, "
+                f"20-day support {tech.get('support_20')} / resistance {tech.get('resistance_20')}, "
+                f"realised volatility {tech.get('realised_vol_pct')}%"
+            )
     return "; ".join(parts)
 
 
@@ -917,8 +948,23 @@ def _mentor_fallback(text: str) -> str:
     return "A useful research workflow is: identify the trend, check momentum and volume, review catalysts and event risk, then define invalidation and position size. I can explain RSI, MACD, candlestick patterns, risk management, portfolio risk, market trends, or strategy concepts in more detail."
 
 
-def _ask_ollama(message: str, symbol: str | None = None, history: list | None = None) -> str:
-    """Call the local-only Ollama chat endpoint. No user data leaves the computer."""
+APP_CONTEXT = (
+    " About the MarketMind app, so you can explain its screens: daily history is real NSE"
+    " bhavcopy data (April 2021 onwards, split and bonus adjusted) for 182 instruments; live"
+    " prices refresh every 20 seconds. Stock Research runs an XGBoost classifier (120 trees,"
+    " depth 3, learning rate 0.1) on 19 technical features to give the probability that the"
+    " next daily close is higher, trained on the first 60% of days and tested on the last 40%,"
+    " with probabilities limited to 7-93%; TreeSHAP bars show how much each feature pushed the"
+    " call up (positive) or down (negative). Backtesting trades at the next day's open with an"
+    " ATR stop-loss and 0.05% round-trip cost, and reports Sharpe, Sortino, Calmar, max drawdown"
+    " and buy-and-hold comparison for 5 strategies. The Scanner filters stocks by indicator"
+    " rules; Market Doctor averages six 0-100 pillars (trend, momentum, volatility, liquidity,"
+    " breadth, sector strength)."
+)
+
+
+def _mentor_messages(message: str, symbol: str | None = None, history: list | None = None) -> list[dict]:
+    """System prompt with live grounding, the recent conversation, then the question."""
     try:
         snapshot = _market_snapshot(symbol)
     except Exception:
@@ -934,14 +980,68 @@ def _ask_ollama(message: str, symbol: str | None = None, history: list | None = 
         " Do not promise returns, tell users exactly what to buy or sell, or give personalised"
         " financial advice."
         " State uncertainty and recommend further research where relevant."
-        f"{context}"
-        + (f" Current levels: {snapshot}." if snapshot else "")
+        + APP_CONTEXT
+        + context
+        + (f" Current data: {snapshot}." if snapshot else "")
+        + " Use plain text with short paragraphs or simple '-' bullet points, no tables."
+        + " Never use LaTeX or math markup; write formulas in plain text,"
+        + " e.g. Sharpe = (return - risk-free rate) / volatility."
         + " Keep answers under 180 words."
     )
     messages = [{"role": "system", "content": system}]
     for turn in (history or [])[-8:]:
         messages.append({"role": turn.role, "content": turn.content})
     messages.append({"role": "user", "content": message})
+    return messages
+
+
+def _ask_groq(message: str, symbol: str | None = None, history: list | None = None) -> str:
+    """Call Groq's OpenAI-compatible chat API. The key stays server-side."""
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("GROQ_API_KEY is not set")
+    model = os.getenv("GROQ_MODEL", GROQ_DEFAULT_MODEL)
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": _mentor_messages(message, symbol, history),
+        "temperature": 0.35,
+        "max_completion_tokens": 1200,
+    }
+    if model.startswith("openai/gpt-oss"):
+        body["reasoning_effort"] = "low"  # keeps replies fast; the answer is short anyway
+    request = Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                 "User-Agent": "MarketMind/1.0"},
+        method="POST",
+    )
+    timeout = float(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))
+    with urlopen(request, timeout=timeout) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    answer = _plain_math(str(data["choices"][0]["message"].get("content") or "")).strip()
+    if not answer:
+        raise ValueError("Groq returned an empty response")
+    return answer
+
+
+def _plain_math(text: str) -> str:
+    """Turn any LaTeX the model still writes into readable plain text."""
+    text = re.sub(r"\\\[|\\\]|\\\(|\\\)|\$\$", "", text)
+    for _ in range(3):  # nested \frac{\text{a}}{\text{b}}
+        text = re.sub(r"\\(?:text|mathrm|mathbf|operatorname)\{([^{}]*)\}", r"\1", text)
+        text = re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"(\1) / (\2)", text)
+        text = re.sub(r"\\sqrt\{([^{}]*)\}", r"√\1", text)
+    replacements = {r"\times": "×", r"\cdot": "·", r"\sqrt": "√", r"\sigma": "σ", r"\mu": "μ",
+                    r"\approx": "≈", r"\leq": "≤", r"\geq": "≥", r"\%": "%", r"\_": "_", r"\,": " "}
+    for latex, plain in replacements.items():
+        text = text.replace(latex, plain)
+    return re.sub(r"[ \t]+\n", "\n", text)
+
+
+def _ask_ollama(message: str, symbol: str | None = None, history: list | None = None) -> str:
+    """Call the local-only Ollama chat endpoint. No user data leaves the computer."""
+    messages = _mentor_messages(message, symbol, history)
     payload = json.dumps({
         "model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
         "stream": False,

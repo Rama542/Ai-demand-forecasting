@@ -782,7 +782,7 @@ export const api = {
   calendar: (signal?: AbortSignal) =>
     request<CalendarResponse>("/api/calendar/events", { signal, timeoutMs: 30_000 }),
 
-  mentor: (payload: { message: string; symbol?: string }, signal?: AbortSignal) =>
+  mentor: (payload: { message: string; symbol?: string; history?: MentorTurn[] }, signal?: AbortSignal) =>
     request<MentorReply>("/api/mentor/chat", {
       method: "POST",
       body: JSON.stringify(payload),
