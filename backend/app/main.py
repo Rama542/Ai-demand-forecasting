@@ -430,6 +430,26 @@ def forecast_accuracy(symbol: str = "NIFTY 50", interval: str = "1D"):
     return _cached_forecast(symbol, interval)
 
 
+@app.get("/api/forecast/scorecard/actual")
+def scorecard_actual(symbol: str, after: int = Query(ge=0)):
+    """Completed real daily closes only; never resolve a call with a simulated feed."""
+    resolved = resolve_symbol(symbol)
+    if resolved is None:
+        return _unknown_symbol(symbol)
+    if not nse_data.has(resolved):
+        return {"error": "No real daily history is available for this instrument."}
+    bars = nse_data.candles(resolved)
+    anchor = next((bar for bar in reversed(bars) if int(bar["time"]) == after), None)
+    next_bar = next((bar for bar in bars if int(bar["time"]) > after), None)
+    return {
+        "symbol": resolved,
+        "source": nse_data.source_for(resolved),
+        "latest_bar": bars[-1],
+        "anchor_bar": anchor,
+        "next_bar": next_bar,
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Research workspace
 # ──────────────────────────────────────────────────────────────────────────

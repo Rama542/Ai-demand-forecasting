@@ -197,6 +197,14 @@ export interface ForecastSummary {
   rolling_accuracy?: { bucket: number; accuracy: number; samples: number }[];
 }
 
+export interface ScorecardActual {
+  symbol: string;
+  source: string;
+  latest_bar: Candle;
+  anchor_bar: Candle | null;
+  next_bar: Candle | null;
+}
+
 export interface AccuracyResponse extends ForecastSummary {
   rolling_accuracy: { bucket: number; accuracy: number; samples: number }[];
 }
@@ -755,6 +763,9 @@ export const api = {
 
   accuracy: (signal?: AbortSignal) =>
     request<AccuracyResponse>("/api/forecast/accuracy", { signal, timeoutMs: 120_000 }),
+
+  scorecardActual: (symbol: string, after: number, signal?: AbortSignal) =>
+    request<ScorecardActual>(`/api/forecast/scorecard/actual${qs({ symbol, after })}`, { signal, timeoutMs: 20_000 }),
 
   news: (params: { symbol?: string } = {}, signal?: AbortSignal) =>
     request<NewsResponse>(`/api/news${qs(params)}`, { signal, timeoutMs: 30_000 }),

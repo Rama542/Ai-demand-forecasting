@@ -11,6 +11,7 @@ import { num, pctPlain, ratio, tone, INTERVALS, PERIODS } from "@/lib/format";
 import { PageHeader } from "@/components/shell/UserMenu";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SymbolInput } from "@/components/SymbolInput";
+import { ForecastCapture } from "@/components/scorecard/ForecastCapture";
 
 type Tab = "price" | "forecast" | "technicals";
 
@@ -229,7 +230,7 @@ function ForecastTab({ bundle }: { bundle: ResearchBundle }) {
 
   if (!explanation || explanation.error || explanation.contributions.length === 0) {
     return (
-      <Card>
+      <div className="stack"><ForecastCapture bundle={bundle} /><Card>
         <EmptyState
           icon="info"
           title="No explanation for this window"
@@ -238,7 +239,7 @@ function ForecastTab({ bundle }: { bundle: ResearchBundle }) {
             "The explainer needs at least two years of daily history. Try widening the research window."
           }
         />
-      </Card>
+      </Card></div>
     );
   }
 
@@ -248,6 +249,7 @@ function ForecastTab({ bundle }: { bundle: ResearchBundle }) {
 
   return (
     <div className="stack">
+      <ForecastCapture bundle={bundle} />
       <Card
         title="What drives the next call"
         subtitle={`${explanation.model} · ${explanation.samples} samples · ${explanation.period}`}

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx lib/calculator.test.ts",
+    "test": "tsx lib/calculator.test.ts && tsx lib/scorecard.test.ts",
     "verify": "npm run typecheck && npm test && next build"
   },
   "dependencies": {

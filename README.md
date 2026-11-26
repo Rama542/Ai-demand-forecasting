@@ -10,6 +10,12 @@ The supplied Firebase web project configuration is in `.env.example` and the loc
 
 In the Firebase console, enable **Authentication → Sign-in method → Email/Password** and add your website domain under **Authentication → Settings → Authorized domains**. Those console settings are required before the sign-up and sign-in forms can work.
 
+## Prediction scorecard
+
+Open Stock Research, choose **Forecast & explanation**, and save the displayed next-daily-close direction call. The Prediction Scorecard records one call per instrument and completed daily bar, then checks it against the next real daily close from the market-history service. It reports the model's hit rate beside an always-UP baseline; pending calls do not count. Simulated, stale, in-progress, and revised-price bars are excluded from scoring.
+
+Scorecard records live in browser storage, separated by signed-in Firebase user ID. They remain on that browser when you sign out, but do not sync between devices and disappear if browser storage is cleared. This is a personal tracking feature, not a server-side audit log. It requires the FastAPI backend and a current real daily-history feed.
+
 ```bash
 npm install
 npm run dev
