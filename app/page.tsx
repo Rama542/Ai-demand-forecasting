@@ -1,5 +1,17 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
+
+const features = [
+  { number: "01", title: "Research with context", detail: "Explore Indian equities with price history, technical indicators and explainable forecasts." },
+  { number: "02", title: "Test your thesis", detail: "Backtest strategies and examine performance before you put an idea to work." },
+  { number: "03", title: "See the whole picture", detail: "Bring market conditions, portfolio diagnostics and scenario analysis into one workspace." },
+];
 
 export default function Home() {
-  redirect("/dashboard");
+  return <main className="landing">
+    <div className="tp-fx" aria-hidden="true" />
+    <header className="landing-nav"><Link href="/" className="landing-brand"><span className="brand-mark">M</span><span className="brand-name">Market<em>Mind</em> AI</span></Link><nav aria-label="Account"><Link href="/login" className="btn btn-ghost">Sign in</Link><Link href="/signup" className="btn btn-primary">Get started ↗</Link></nav></header>
+    <section className="landing-hero"><div className="landing-copy"><span className="landing-kicker"><span className="landing-dot" /> INDIAN EQUITY RESEARCH WORKSPACE</span><h1>Clarity for every <span>market decision.</span></h1><p>Research stocks, test ideas and understand the forces behind each forecast in one focused workspace.</p><div className="landing-actions"><Link href="/signup" className="btn btn-primary btn-lg">Create your account →</Link><Link href="/login" className="btn btn-secondary btn-lg">Enter workspace</Link></div><div className="landing-proof"><span>RESEARCH</span><span>BACKTESTING</span><span>MARKET CONTEXT</span></div></div>
+      <div className="landing-preview" aria-label="MarketMind research workspace preview"><div className="landing-preview-top"><span><span className="landing-dot" /> MARKET OVERVIEW</span><span>RESEARCH DESK / 01</span></div><div className="landing-preview-title">A clearer view of the market <span>↗</span></div><div className="landing-preview-grid"><div><small>WORKSPACE</small><strong>India equities</strong></div><div><small>ANALYSIS</small><strong>Evidence led</strong></div><div><small>INSIGHTS</small><strong>Explainable</strong></div></div><div className="landing-chart"><div className="landing-chart-lines" /><svg viewBox="0 0 520 170" preserveAspectRatio="none" role="img" aria-label="Illustrative analysis line"><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="var(--accent)" stopOpacity=".27"/><stop offset="1" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs><path d="M0 140 L40 125 L80 133 L120 103 L160 111 L200 98 L240 114 L280 76 L320 89 L360 63 L400 72 L440 37 L480 52 L520 22 L520 170 L0 170Z" fill="url(#chartFill)"/><path d="M0 140 L40 125 L80 133 L120 103 L160 111 L200 98 L240 114 L280 76 L320 89 L360 63 L400 72 L440 37 L480 52 L520 22" fill="none" stroke="var(--accent)" strokeWidth="2.5" vectorEffect="non-scaling-stroke"/></svg></div><div className="landing-preview-foot"><span>DISCOVER → ANALYZE → DECIDE</span><span>MARKETMIND AI</span></div></div>
+    </section><section className="landing-features" aria-labelledby="features-heading"><div className="landing-section-head"><span className="eyebrow">BUILT FOR BETTER QUESTIONS</span><h2 id="features-heading">One place for the full picture.</h2></div><div className="landing-feature-grid">{features.map(f => <article className="landing-feature" key={f.number}><span>{f.number} /</span><h3>{f.title}</h3><p>{f.detail}</p></article>)}</div></section><footer className="landing-footer"><span>© {new Date().getFullYear()} MarketMind AI</span><span>Research insights are not financial advice.</span></footer>
+  </main>;
 }

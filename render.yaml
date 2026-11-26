@@ -29,10 +29,24 @@ services:
     plan: free
     buildCommand: npm ci && npm run build && cp -r .next/static .next/standalone/.next/static
     startCommand: HOSTNAME=0.0.0.0 node .next/standalone/server.js
-    healthCheckPath: /dashboard
+    healthCheckPath: /
     envVars:
       - key: NODE_VERSION
         value: "20"
       # Backend URL, e.g. https://marketmind-api.onrender.com (read at build time)
       - key: NEXT_PUBLIC_API_URL
         sync: false
+      - key: NEXT_PUBLIC_FIREBASE_API_KEY
+        value: AIzaSyB3Nyz8ZH9AYWr28rpk_oLmHsX3cWo9Otw
+      - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+        value: studio-3049477614-ce440.firebaseapp.com
+      - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        value: studio-3049477614-ce440
+      - key: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+        value: studio-3049477614-ce440.firebasestorage.app
+      - key: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+        value: "486617441293"
+      - key: NEXT_PUBLIC_FIREBASE_APP_ID
+        value: "1:486617441293:web:b2b41c1803c7ca2e63e144"
+      - key: AUTH_SECRET
+        generateValue: true

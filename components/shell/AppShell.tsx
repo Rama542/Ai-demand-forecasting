@@ -69,10 +69,12 @@ function Sidebar({
   collapsed,
   onToggleCollapse,
   onNavigate,
+  account,
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onNavigate: () => void;
+  account: { name: string; email: string } | null;
 }) {
   const pathname = usePathname();
 
@@ -89,11 +91,11 @@ function Sidebar({
 
       <div className="workspace" role="group" aria-label="Current workspace">
         <span className="workspace-avatar" aria-hidden="true">
-          DE
+          {account?.name.slice(0, 2).toUpperCase() || "MM"}
         </span>
         <span className="workspace-meta">
-          <b>Demo workspace</b>
-          <small>paper trading</small>
+          <b>{account?.name || "My workspace"}</b>
+          <small>{account?.email || "MarketMind AI"}</small>
         </span>
       </div>
 
@@ -141,12 +143,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [live, setLive] = React.useState<LiveStatus | null>(null);
   const [realtime, setRealtime] = useLocalStorage("marketmind-streaming", false);
+  const [account, setAccount] = React.useState<{ name: string; email: string } | null>(null);
+  const publicPage = pathname === "/" || pathname === "/login" || pathname === "/signup";
+
+  React.useEffect(() => {
+    if (publicPage) return;
+    fetch("/api/auth/me", { cache: "no-store" }).then(async response => {
+      if (response.ok) setAccount(await response.json());
+      else if (response.status === 401) window.location.replace("/login");
+    }).catch(() => {});
+  }, [publicPage]);
 
   const active = NAV.flatMap((section) => section.items).find((item) => isActive(pathname, item.href));
   const wide = active?.wide ?? false;
 
   /* Poll health so the status badge reflects the real backend, not a guess. */
   React.useEffect(() => {
+    if (publicPage) return;
     const controller = new AbortController();
     let alive = true;
 
@@ -165,7 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       controller.abort();
       clearInterval(timer);
     };
-  }, []);
+  }, [publicPage]);
 
   /* Cmd/Ctrl+K opens the palette from anywhere. */
   React.useEffect(() => {
@@ -183,6 +196,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setMobileOpen(false);
   }, [pathname]);
 
+  if (publicPage) return <>{children}</>;
+
   return (
     <div
       className="shell"
@@ -197,6 +212,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed(!collapsed)}
         onNavigate={() => setMobileOpen(false)}
+        account={account}
       />
 
       {mobileOpen ? (
@@ -260,7 +276,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             />
           </Link>
 
-          <UserMenu />
+          <UserMenu account={account} />
         </header>
 
         {children}

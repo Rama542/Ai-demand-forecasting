@@ -4,8 +4,10 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui";
+import { signOut } from "firebase/auth";
+import { firebaseAuth } from "@/lib/firebase";
 
-export function UserMenu() {
+export function UserMenu({ account }: { account: { name: string; email: string } | null }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -36,15 +38,15 @@ export function UserMenu() {
         aria-expanded={open}
         aria-label="Account menu"
       >
-        DE
+        {account?.name.slice(0, 2).toUpperCase() || "MM"}
       </button>
 
       {open ? (
         <div className="dropdown-menu" role="menu">
-          <div className="dropdown-label">Demo workspace</div>
+          <div className="dropdown-label">{account?.name || "My workspace"}</div>
           <div style={{ padding: "0 var(--sp-3) var(--sp-2)" }}>
             <p className="faint" style={{ fontSize: "var(--text-xs)", lineHeight: 1.5 }}>
-              You are in a local demo environment. No account is connected and nothing is billed.
+              {account?.email || "MarketMind AI account"}
             </p>
           </div>
           <div className="dropdown-sep" />
@@ -64,12 +66,15 @@ export function UserMenu() {
             type="button"
             className="dropdown-item"
             role="menuitem"
-            disabled
-            title="Authentication is not enabled in this build."
-            style={{ opacity: 0.5, cursor: "not-allowed" }}
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              await signOut(firebaseAuth).catch(() => {});
+              setOpen(false);
+              window.location.replace("/");
+            }}
           >
             <Icon name="logout" />
-            Sign out — coming soon
+            Sign out
           </button>
         </div>
       ) : null}

@@ -4,6 +4,12 @@ AI-powered market intelligence and decision support platform. The repository inc
 
 ## Run locally
 
+The public landing page is at `/`. The account screens use Firebase Authentication for email and password. The Next.js server verifies the Firebase ID token and issues a signed, HTTP-only session cookie for the protected dashboard. MongoDB is not needed for authentication.
+
+The supplied Firebase web project configuration is in `.env.example` and the local `.env`. Keep `AUTH_SECRET` server-only; generate a random value of at least 32 characters for each deployment. Add all `NEXT_PUBLIC_FIREBASE_*` values and `AUTH_SECRET` to the deployment environment. For Docker Compose, the Firebase values are also passed during the image build.
+
+In the Firebase console, enable **Authentication → Sign-in method → Email/Password** and add your website domain under **Authentication → Settings → Authorized domains**. Those console settings are required before the sign-up and sign-in forms can work.
+
 ```bash
 npm install
 npm run dev

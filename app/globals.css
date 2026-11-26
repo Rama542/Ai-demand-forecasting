@@ -588,3 +588,57 @@ table.data a:hover{color:var(--accent)}
   .toast{min-width:0}
   .modal-foot{flex-wrap:wrap}
 }
+/* Public entry and account pages use the same SLATE tokens as the workspace. */
+.landing,.auth-page{position:relative;isolation:isolate;min-height:100vh;background:var(--bg-canvas);overflow:hidden}
+.landing>.tp-fx,.auth-page>.tp-fx{position:fixed;inset:0;z-index:-1}
+.landing-nav{height:76px;max-width:1260px;margin:auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-subtle)}
+.landing-brand{display:inline-flex;align-items:center;gap:10px;color:var(--text-primary);text-decoration:none}
+.landing-nav nav{display:flex;align-items:center;gap:12px}
+.landing-hero{max-width:1260px;margin:0 auto;padding:94px 32px 104px;display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center}
+.landing-copy{max-width:600px}
+.landing-kicker{display:inline-flex;align-items:center;gap:10px;color:var(--accent);font:600 11px var(--font-mono);letter-spacing:.1em}
+.landing-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);vertical-align:middle}
+.landing-copy h1{font-size:clamp(44px,5.4vw,76px);line-height:1.06;letter-spacing:-.06em;font-weight:600;margin:27px 0 22px}
+.landing-copy h1 span{color:var(--accent)}
+.landing-copy>p{font-size:18px;line-height:1.7;color:var(--text-secondary);max-width:520px}
+.landing-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:34px}
+.landing-proof{display:flex;gap:18px;flex-wrap:wrap;margin-top:58px;color:var(--text-tertiary);font:500 10px var(--font-mono);letter-spacing:.1em}
+.landing-proof span+span:before{content:"/";margin-right:18px;color:var(--border-strong)}
+.landing-preview{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--tp-sh);padding:24px;min-width:0;transform:perspective(1000px) rotateY(-3deg)}
+.landing-preview-top,.landing-preview-foot{display:flex;justify-content:space-between;gap:15px;color:var(--text-tertiary);font:500 10px var(--font-mono);letter-spacing:.08em}
+.landing-preview-top .landing-dot{margin-right:7px}
+.landing-preview-title{font-size:23px;font-weight:600;letter-spacing:-.04em;margin:34px 0 22px;display:flex;justify-content:space-between}
+.landing-preview-title span{color:var(--accent)}
+.landing-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.landing-preview-grid>div{background:var(--bg-raised);border:1px solid var(--border-subtle);border-radius:var(--radius);padding:14px 10px;min-width:0}
+.landing-preview-grid small{display:block;color:var(--text-tertiary);font:500 9px var(--font-mono);letter-spacing:.08em}
+.landing-preview-grid strong{display:block;margin-top:8px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.landing-chart{height:205px;position:relative;margin:16px 0 20px;background:var(--bg-raised);border:1px solid var(--border-subtle);border-radius:var(--radius);overflow:hidden;padding:14px}
+.landing-chart-lines{position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent 0,transparent 40px,var(--border-subtle) 41px);opacity:.7}
+.landing-chart svg{position:relative;width:100%;height:100%}
+.landing-features{max-width:1260px;margin:0 auto;padding:60px 32px 100px;border-top:1px solid var(--border-subtle)}
+.landing-section-head h2{font-size:clamp(28px,3vw,40px);letter-spacing:-.04em;margin-top:9px}
+.landing-feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:35px}
+.landing-feature{border:1px solid var(--border-subtle);background:var(--bg-surface);border-radius:var(--radius-lg);padding:25px;min-height:194px}
+.landing-feature>span{color:var(--accent);font:500 11px var(--font-mono)}
+.landing-feature h3{font-size:18px;letter-spacing:-.02em;margin:27px 0 10px}
+.landing-feature p{color:var(--text-secondary);line-height:1.6;font-size:13px}
+.landing-footer{border-top:1px solid var(--border-subtle);padding:24px 32px;display:flex;justify-content:space-between;gap:15px;color:var(--text-tertiary);font-size:12px;max-width:1260px;margin:auto}
+.auth-page{display:grid;place-items:center;padding:32px 20px}
+.auth-wrap{width:min(100%,430px)}
+.auth-wrap>.landing-brand{margin-bottom:32px}
+.auth-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--tp-sh);padding:34px}
+.auth-card h1{font-size:30px;letter-spacing:-.04em;margin:12px 0 5px}
+.auth-card>p{color:var(--text-secondary);font-size:14px;margin-bottom:28px}
+.auth-card form{display:grid;gap:18px}
+.auth-card label{display:grid;gap:7px;font-size:13px;font-weight:550}
+.auth-card input{width:100%;height:42px;background:var(--bg-canvas);border:1px solid var(--border-default);border-radius:var(--radius-btn);color:var(--text-primary);padding:0 12px;font:inherit;outline:none}
+.auth-card input:focus{border-color:var(--accent)}
+.auth-card input::placeholder{color:var(--text-tertiary)}
+.auth-card form button{margin-top:8px}
+.auth-error{padding:10px 12px;border-radius:var(--radius);color:var(--bear);background:var(--bear-soft);border:1px solid var(--bear-border);font-size:13px}
+.auth-switch{margin-top:25px;padding-top:20px;border-top:1px solid var(--border-subtle);text-align:center;color:var(--text-secondary);font-size:13px}
+.auth-switch a,.auth-back{color:var(--accent);text-decoration:none}
+.auth-back{display:inline-block;margin-top:24px;font-size:13px}
+@media(max-width:900px){.landing-hero{grid-template-columns:1fr;padding-top:65px;gap:45px}.landing-copy{max-width:700px}.landing-preview{transform:none}}
+@media(max-width:600px){.landing-nav{padding:0 18px}.landing-nav .btn-ghost{display:none}.landing-hero{padding:58px 20px 70px}.landing-copy h1{font-size:46px}.landing-preview{padding:16px}.landing-preview-grid{gap:5px}.landing-preview-grid>div{padding:10px 6px}.landing-preview-grid strong{font-size:11px}.landing-features{padding:55px 20px}.landing-feature-grid{grid-template-columns:1fr}.landing-footer{padding:20px;display:grid}.auth-card{padding:25px}}

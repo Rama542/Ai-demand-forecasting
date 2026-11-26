@@ -12,6 +12,7 @@
     "verify": "npm run typecheck && npm test && next build"
   },
   "dependencies": {
+    "firebase": "^12.6.0",
     "lightweight-charts": "^5.2.1",
     "next": "14.2.15",
     "react": "18.3.1",
